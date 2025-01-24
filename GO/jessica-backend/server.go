@@ -12,7 +12,6 @@ import (
 	"strconv"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -154,9 +153,13 @@ func login(c *gin.Context) {
 	})
 }
 
+func init() {
+	gin.SetMode(gin.ReleaseMode)
+}
+
 func main() {
 	// Database connection - corrigindo a string de conexão
-	connStr := "host=localhost port=5432 user=postgres dbname=sistema_materiais sslmode=disable"
+	connStr := "host=localhost port=5432 user=postgres password=3matleo3 dbname=jessica sslmode=disable"
 	var err error
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
@@ -173,17 +176,25 @@ func main() {
 	// Initialize Gin router
 	router := gin.Default()
 
-	// Configure CORS
-	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	router.Use(cors.New(config))
+	// Substituir toda a configuração CORS existente por esta mais simples
+	router.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "http://5.78.129.228:4004")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Authorization, Content-Type")
+		c.Header("Access-Control-Allow-Credentials", "true")
 
-	// Public routes - sem autenticação
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
+
+	// Public routes
 	router.POST("/login", login)
 
-	// Rotas que exigem autenticação mas não precisam ser admin
+	// Protected routes
 	authorized := router.Group("/")
 	authorized.Use(authMiddleware())
 	{
@@ -191,7 +202,7 @@ func main() {
 		authorized.GET("/busca_material_id/:id", getMaterialByID)
 		authorized.POST("/vender_material/:id", venderMaterial)
 		authorized.GET("/lucros_mensais", getLucrosMensais)
-		authorized.GET("/buscar_boletos", getBoletos) // Move this here
+		authorized.GET("/buscar_boletos", getBoletos)
 
 		// Admin routes
 		admin := authorized.Group("/admin")
@@ -218,6 +229,21 @@ func main() {
 
 	// Start server
 	router.Run(":5000")
+}
+
+func setupCORSSimple() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }
 
 // Função auxiliar para converter string para float64
